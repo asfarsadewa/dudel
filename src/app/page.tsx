@@ -1,103 +1,121 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import DudelCanvas from '@/components/DudelCanvas';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const [authorized, setAuthorized] = useState(false);
+  const [numbers, setNumbers] = useState<number[]>([]);
+  const [sortedIndices, setSortedIndices] = useState<number[]>([]);
+  const [userClicks, setUserClicks] = useState<number[]>([]);
+  const [gameMessage, setGameMessage] = useState<string>('Click the numbers in ascending order (lowest to highest)');
+  
+  // Generate random numbers on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      generateRandomNumbers();
+    }
+  }, []);
+  
+  // Generate 4 random numbers between 0 and 100
+  const generateRandomNumbers = () => {
+    const randomNums = Array.from({ length: 4 }, () => Math.floor(Math.random() * 101));
+    setNumbers(randomNums);
+    
+    // Calculate the sorted indices (which index to click first, second, etc.)
+    const indices = randomNums.map((_, index) => index);
+    indices.sort((a, b) => randomNums[a] - randomNums[b]);
+    setSortedIndices(indices);
+    
+    console.log('Numbers:', randomNums);
+    console.log('Click order (indices):', indices);
+    console.log('Expected clicks (values):', indices.map(idx => randomNums[idx]));
+  };
+  
+  // Handle number click
+  const handleNumberClick = (index: number) => {
+    const clickPosition = sortedIndices.indexOf(index);
+    const expectedPosition = userClicks.length;
+    
+    // Check if this is the correct next number to click
+    if (clickPosition === expectedPosition) {
+      const newClicks = [...userClicks, index];
+      setUserClicks(newClicks);
+      
+      // Complete sequence entered correctly
+      if (newClicks.length === sortedIndices.length) {
+        setGameMessage('Correct! Accessing Dudel...');
+        setTimeout(() => {
+          setAuthorized(true);
+        }, 1000);
+      }
+    } else {
+      // Incorrect click
+      setGameMessage('Incorrect! Try again with a new set of numbers.');
+      setUserClicks([]);
+      generateRandomNumbers();
+    }
+  };
+  
+  if (!authorized) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-6">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">Welcome to Dudel</h1>
+          <p className="text-gray-600 mb-8">
+            {gameMessage}
+          </p>
+          
+          <div className="text-md mb-4">
+            <span className="font-medium">Your progress: </span>
+            {Array.from({ length: 4 }).map((_, index) => (
+              <span key={index} className={`mx-1 inline-block w-4 h-4 rounded-full ${
+                index < userClicks.length ? 'bg-green-500' : 'bg-gray-300'
+              }`}></span>
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        
+        <div className="w-full max-w-md bg-white p-6 rounded-lg shadow-md">
+          {/* The numbers to click */}
+          <div className="flex justify-center flex-wrap gap-4">
+            {numbers.map((num, index) => (
+              <button
+                key={index}
+                className={`w-20 h-20 rounded-lg bg-blue-500 text-white text-2xl font-bold shadow-md hover:bg-blue-600 transition-colors
+                  ${userClicks.includes(index) ? 'opacity-50' : 'opacity-100'}`}
+                onClick={() => handleNumberClick(index)}
+                disabled={userClicks.includes(index)}
+              >
+                {num}
+              </button>
+            ))}
+          </div>
+          
+          <div className="mt-6 text-center text-sm text-gray-500">
+            Click the numbers from lowest to highest value
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show the actual app once authorized
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-start p-2 sm:p-6">
+      <h1 className="text-3xl sm:text-4xl font-bold mb-4 sm:mb-6">Dudel</h1>
+      <DudelCanvas />
+      
+      <footer className="mt-8 mb-4 text-sm text-gray-500">
+        <a 
+          href="https://x.com/ashthepeasant" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="hover:text-blue-500 transition-colors duration-200"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+          @ashthepeasant
+        </a> for saru2.com
       </footer>
-    </div>
+    </main>
   );
 }
