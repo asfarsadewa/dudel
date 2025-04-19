@@ -154,10 +154,11 @@ export async function POST(req: Request) {
     console.log('[API] Result structure:', JSON.stringify(result, null, 2));
     
     // If the result contains an image URL, download it and convert to base64
-    if (result.image && result.image.url) {
+    if (result.image && typeof result.image === 'object' && 'url' in result.image) {
       try {
-        console.log('[API] Downloading image from URL:', result.image.url);
-        const imageBase64 = await fetchImageAsBase64(result.image.url);
+        const imageUrl = result.image.url as string;
+        console.log('[API] Downloading image from URL:', imageUrl);
+        const imageBase64 = await fetchImageAsBase64(imageUrl);
         console.log('[API] Successfully downloaded and converted image to base64');
         return NextResponse.json({
           ...result,
@@ -170,11 +171,13 @@ export async function POST(req: Request) {
           error_detail: 'Failed to convert image to base64, using URL directly'
         });
       }
-    } else if (result.images && Array.isArray(result.images) && result.images.length > 0 && result.images[0].url) {
+    } else if (result.images && Array.isArray(result.images) && result.images.length > 0 && 
+               typeof result.images[0] === 'object' && 'url' in result.images[0]) {
       // Handle images array (fal.ai uses this structure)
       try {
-        console.log('[API] Downloading image from images array URL:', result.images[0].url);
-        const imageBase64 = await fetchImageAsBase64(result.images[0].url);
+        const imageUrl = result.images[0].url as string;
+        console.log('[API] Downloading image from images array URL:', imageUrl);
+        const imageBase64 = await fetchImageAsBase64(imageUrl);
         console.log('[API] Successfully downloaded and converted images[0] to base64');
         return NextResponse.json({
           ...result,
@@ -187,10 +190,15 @@ export async function POST(req: Request) {
           error_detail: 'Failed to convert image from images array to base64, using URL directly'
         });
       }
-    } else if (result.result && result.result.image && result.result.image.url) {
+    } else if (result.result && typeof result.result === 'object' && 
+               'image' in result.result && 
+               result.result.image && 
+               typeof result.result.image === 'object' && 
+               'url' in result.result.image) {
       try {
-        console.log('[API] Downloading nested image from URL:', result.result.image.url);
-        const imageBase64 = await fetchImageAsBase64(result.result.image.url);
+        const imageUrl = result.result.image.url as string;
+        console.log('[API] Downloading nested image from URL:', imageUrl);
+        const imageBase64 = await fetchImageAsBase64(imageUrl);
         console.log('[API] Successfully downloaded and converted nested image to base64');
         return NextResponse.json({
           ...result,

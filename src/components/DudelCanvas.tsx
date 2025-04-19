@@ -422,21 +422,26 @@ const DudelCanvas: React.FC = () => {
         console.log('[Client] handleGenerate: JSON structure:', JSON.stringify(json, null, 2));
         
         // First check if we have the locally stored base64 version
-        if (json.imageBase64) {
+        if (typeof json.imageBase64 === 'string') {
           output = json.imageBase64;
           console.log('[Client] handleGenerate: found local imageBase64');
         }
         // Fallback to URL versions if base64 isn't available
-        else if (json.image && json.image.url) {
+        else if (json.image && typeof json.image === 'object' && 'url' in json.image && typeof json.image.url === 'string') {
           output = json.image.url;
           console.log('[Client] handleGenerate: found image.url:', output);
-        } else if (json.images && Array.isArray(json.images)) {
+        } else if (json.images && Array.isArray(json.images) && json.images.length > 0 && typeof json.images[0] === 'string') {
           output = json.images[0];
           console.log('[Client] handleGenerate: found images array:', output);
-        } else if (json.output && Array.isArray(json.output)) {
+        } else if (json.output && Array.isArray(json.output) && json.output.length > 0 && typeof json.output[0] === 'string') {
           output = json.output[0];
           console.log('[Client] handleGenerate: found output array:', output);
-        } else if (json.result && json.result.image && json.result.image.url) {
+        } else if (json.result && typeof json.result === 'object' && 
+                  'image' in json.result && 
+                  json.result.image && 
+                  typeof json.result.image === 'object' && 
+                  'url' in json.result.image && 
+                  typeof json.result.image.url === 'string') {
           // Handle nested result structure
           output = json.result.image.url;
           console.log('[Client] handleGenerate: found result.image.url:', output);
