@@ -255,43 +255,6 @@ const DudelCanvas: React.FC = () => {
     setResultImage(null);
   };
 
-  const drawRandomShape = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const shapes = ['circle', 'rect', 'triangle', 'line'] as const;
-    const shape = shapes[Math.floor(Math.random() * shapes.length)];
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    const size = 20 + Math.random() * 80;
-    ctx.strokeStyle = brushColor;
-    ctx.lineWidth = brushSize;
-    ctx.beginPath();
-    switch (shape) {
-      case 'circle':
-        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-        break;
-      case 'rect':
-        ctx.rect(x - size / 2, y - size / 2, size, size);
-        break;
-      case 'triangle':
-        ctx.moveTo(x, y - size / 2);
-        ctx.lineTo(x + size / 2, y + size / 2);
-        ctx.lineTo(x - size / 2, y + size / 2);
-        ctx.closePath();
-        break;
-      case 'line': {
-        const x2 = x + (Math.random() > 0.5 ? size : -size);
-        const y2 = y + (Math.random() > 0.5 ? size : -size);
-        ctx.moveTo(x, y);
-        ctx.lineTo(x2, y2);
-        break;
-      }
-    }
-    ctx.stroke();
-  };
-  
   // Function to ensure canvas has content
   const hasCanvasContent = (): boolean => {
     const canvas = canvasRef.current;
@@ -576,7 +539,6 @@ const DudelCanvas: React.FC = () => {
       </div>
       <div className="flex flex-wrap gap-2 w-full">
         <Button onClick={clearCanvas} size="sm">Clear</Button>
-        <Button onClick={drawRandomShape} size="sm">Random Shape</Button>
         {resultImage && (
           <Button 
             onClick={() => setResultImage(null)}
