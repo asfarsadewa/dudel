@@ -300,11 +300,12 @@ const DudelCanvas: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
     
-    // Get image data from the entire canvas
+    // Get image data from the entire canvas without dividing by devicePixelRatio
+    // This ensures we check the entire canvas at its actual resolution
     const imageData = ctx.getImageData(
       0, 0, 
-      canvas.width / window.devicePixelRatio, 
-      canvas.height / window.devicePixelRatio
+      canvas.width, 
+      canvas.height
     );
     const data = imageData.data;
     
@@ -314,6 +315,12 @@ const DudelCanvas: React.FC = () => {
         return true; // Found a non-transparent pixel
       }
     }
+    
+    console.log('[Client] hasCanvasContent: no content found in canvas', {
+      width: canvas.width,
+      height: canvas.height,
+      dataLength: data.length
+    });
     
     return false;
   };
@@ -370,18 +377,17 @@ const DudelCanvas: React.FC = () => {
     tempCtx.fillStyle = 'white';
     tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
     
-    // Scale to match the original canvas scale
-    tempCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    
-    // Draw the original canvas content on top
+    // Draw the original canvas content directly without rescaling
+    // This preserves all drawing at the original resolution
     tempCtx.drawImage(
       canvas, 
-      0, 0, 
-      canvas.width, canvas.height,
-      0, 0,
-      canvas.width / window.devicePixelRatio, 
-      canvas.height / window.devicePixelRatio
+      0, 0
     );
+    
+    console.log('[Client] handleGenerate: temp canvas dimensions', {
+      width: tempCanvas.width, 
+      height: tempCanvas.height
+    });
     
     // Get high-quality PNG with 1.0 quality from the temp canvas with white background
     const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
