@@ -82,11 +82,34 @@ const DudelCanvas: React.FC = () => {
   const lassoPointsRef = useRef<{ x: number; y: number }[]>([]);
   // user description of drawing
   const [description, setDescription] = useState<string>("");
+  // Input mode state
+  const [inputMode, setInputMode] = useState<'sketch' | 'photo'>('sketch');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   // generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState<'submitting' | 'processing' | 'completed'>('submitting');
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoDataUrl(reader.result as string);
+        setError(null); // Clear any previous file read errors
+      };
+      reader.onerror = () => {
+        console.error("FileReader error:", reader.error);
+        setError(`Failed to read '${file.name}'. The file might be corrupted or not a supported image type. Please try a different file.`);
+        setPhotoDataUrl(null);
+        setSelectedFileName(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Resize canvas to full width of container, adjust aspect ratio based on screen orientation
   const containerRef = useRef<HTMLDivElement>(null);
@@ -253,6 +276,9 @@ const DudelCanvas: React.FC = () => {
     
     // Also clear the result image
     setResultImage(null);
+    // Clear photo input
+    setPhotoDataUrl(null);
+    setSelectedFileName(null);
   };
 
   // Function to ensure canvas has content
@@ -297,12 +323,22 @@ const DudelCanvas: React.FC = () => {
     }
     // Description is now optional - we'll use a default if it's empty
     
-    // Check if the canvas has any content
-    if (!hasCanvasContent()) {
-      console.error('[Client] handleGenerate: canvas is empty');
-      setError('Please draw something before generating!');
-      return;
+    if (inputMode === 'sketch') {
+      // Check if the canvas has any content only for sketch mode
+      if (!hasCanvasContent()) {
+        console.error('[Client] handleGenerate: canvas is empty');
+        setError('Please draw something before generating!');
+        return;
+      }
+    } else if (inputMode === 'photo') {
+      if (!photoDataUrl) {
+        console.error('[Client] handleGenerate: no photo selected');
+        setError('Please select a photo before generating!');
+        setIsGenerating(false); // Reset loading state
+        return;
+      }
     }
+
     setIsGenerating(true);
     setGenerationStage('submitting');
     setError(null);
@@ -353,17 +389,30 @@ const DudelCanvas: React.FC = () => {
     });
     
     // Get high-quality PNG with 1.0 quality from the temp canvas with white background
-    const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
-    console.log('[Client] handleGenerate: captured dataUrl of length', dataUrl.length);
-    const base64 = dataUrl.split(',')[1];
-    console.log('[Client] handleGenerate: sending POST to /api/generate', { prompt: description, imageSize: `${canvas.width}x${canvas.height}` });
+    let imageToSend = '';
+    if (inputMode === 'sketch') {
+      const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
+      console.log('[Client] handleGenerate: captured dataUrl of length for sketch', dataUrl.length);
+      imageToSend = dataUrl.split(',')[1];
+    } else if (inputMode === 'photo' && photoDataUrl) {
+      console.log('[Client] handleGenerate: using photoDataUrl of length', photoDataUrl.length);
+      imageToSend = photoDataUrl.split(',')[1]; // Assuming photoDataUrl is base64 with prefix
+    }
+
+    if (!imageToSend) {
+      setError('No image data to send.');
+      setIsGenerating(false);
+      return;
+    }
+
+    console.log('[Client] handleGenerate: sending POST to /api/generate', { prompt: description, imageSize: inputMode === 'sketch' ? `${canvas.width}x${canvas.height}` : 'photo' });
     try {
       setGenerationStage('submitting');
       console.log('[Client] handleGenerate: submitting request to API');
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, prompt: description }),
+        body: JSON.stringify({ image: imageToSend, prompt: description }),
       });
       
       // After submission is accepted, set stage to processing
@@ -439,6 +488,26 @@ const DudelCanvas: React.FC = () => {
     <div className="flex flex-col items-center space-y-3 w-[95%] sm:w-[90%] max-w-[900px]">
       {/* Controls for drawing - responsive for mobile */}
       <div className="flex flex-wrap gap-4 w-full justify-start items-center">
+        {/* Mode Selection Buttons */}
+        <div className="flex items-center space-x-2 mb-2">
+          <Button
+            onClick={() => setInputMode('sketch')}
+            variant={inputMode === 'sketch' ? 'default' : 'outline'}
+            size="sm"
+          >
+            Sketch Mode
+          </Button>
+          <Button
+            onClick={() => setInputMode('photo')}
+            variant={inputMode === 'photo' ? 'default' : 'outline'}
+            size="sm"
+          >
+            Photo Mode
+          </Button>
+        </div>
+      </div>
+      {/* Controls for drawing - responsive for mobile */}
+      <div className={`flex flex-wrap gap-4 w-full justify-start items-center ${inputMode === 'photo' ? 'hidden' : ''}`}>
         <label className="flex items-center space-x-1">
           <span className="text-sm">Tool:</span>
           <select
@@ -480,6 +549,50 @@ const DudelCanvas: React.FC = () => {
           <span className="text-sm w-6 text-right">{brushSize}</span>
         </div>
       </div>
+
+      {/* Photo Input UI */}
+      {inputMode === 'photo' && !resultImage && (
+        <div className="w-full space-y-2">
+          {!photoDataUrl ? (
+            <div className="flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg">
+              <label htmlFor="photo-upload" className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm">
+                Upload Photo
+              </label>
+              <input
+                id="photo-upload"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+              <p className="text-xs text-muted-foreground mt-2">Select an image file (PNG, JPG, etc.)</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative w-full aspect-[4/3] rounded-md overflow-hidden border">
+                <Image src={photoDataUrl} alt="Selected photo" layout="fill" objectFit="contain" />
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span>{selectedFileName}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPhotoDataUrl(null);
+                    setSelectedFileName(null);
+                    // Optionally, clear the file input value if needed
+                    const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+                    if (fileInput) fileInput.value = '';
+                  }}
+                >
+                  Clear Photo
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div ref={containerRef} className="w-full border border-gray-300 relative rounded-lg overflow-hidden shadow-md">
         {/* Canvas for drawing */}
         <canvas
@@ -489,10 +602,12 @@ const DudelCanvas: React.FC = () => {
           onPointerMove={draw}
           onPointerUp={stopDrawing}
           onPointerLeave={stopDrawing}
-          style={{display: resultImage ? 'none' : 'block'}}
+          style={{
+            display: (inputMode === 'photo' && photoDataUrl) || resultImage ? 'none' : 'block',
+          }}
         />
         
-        {/* Result image (overlays the canvas when available) */}
+        {/* Result image (overlays the canvas or photo preview when available) */}
         {resultImage && typeof resultImage === 'string' && (
           <div className="absolute top-0 left-0 w-full h-full slide-reveal">
             {resultImage.startsWith('data:') || resultImage.startsWith('http') ? (
@@ -500,7 +615,7 @@ const DudelCanvas: React.FC = () => {
                 src={resultImage}
                 alt="Generated Image"
                 className="w-full h-full object-cover rounded scale-in"
-                fill={true}
+                fill={true} // Changed layout to fill
                 style={{opacity: 0}} // Initial state, animation will override this
                 priority={true}
                 onLoad={(e) => {
@@ -538,14 +653,18 @@ const DudelCanvas: React.FC = () => {
         )}
       </div>
       <div className="flex flex-wrap gap-2 w-full">
-        <Button onClick={clearCanvas} size="sm">Clear</Button>
+        <Button onClick={clearCanvas} size="sm">Clear All</Button> {/* Changed Clear to Clear All */}
         {resultImage && (
           <Button 
-            onClick={() => setResultImage(null)}
+            onClick={() => {
+              setResultImage(null);
+              // If in photo mode and a photo was uploaded, keep it.
+              // If in sketch mode, canvas is already clear or will be cleared by clearCanvas.
+            }}
             variant="outline"
             size="sm"
           >
-            Back to Drawing
+            {inputMode === 'sketch' ? 'Back to Drawing' : 'Back to Photo'}
           </Button>
         )}
       </div>
