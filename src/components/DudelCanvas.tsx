@@ -86,6 +86,7 @@ const DudelCanvas: React.FC = () => {
   const [inputMode, setInputMode] = useState<'sketch' | 'photo'>('sketch');
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [photoMimeType, setPhotoMimeType] = useState<string | null>(null);
   // generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState<'submitting' | 'processing' | 'completed'>('submitting');
@@ -96,6 +97,7 @@ const DudelCanvas: React.FC = () => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
+      setPhotoMimeType(file.type); // Store MIME type
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoDataUrl(reader.result as string);
@@ -106,6 +108,7 @@ const DudelCanvas: React.FC = () => {
         setError(`Failed to read '${file.name}'. The file might be corrupted or not a supported image type. Please try a different file.`);
         setPhotoDataUrl(null);
         setSelectedFileName(null);
+        setPhotoMimeType(null); // Reset MIME type on error
       };
       reader.readAsDataURL(file);
     }
@@ -279,6 +282,7 @@ const DudelCanvas: React.FC = () => {
     // Clear photo input
     setPhotoDataUrl(null);
     setSelectedFileName(null);
+    setPhotoMimeType(null); // Reset MIME type
   };
 
   // Function to ensure canvas has content
@@ -331,9 +335,9 @@ const DudelCanvas: React.FC = () => {
         return;
       }
     } else if (inputMode === 'photo') {
-      if (!photoDataUrl) {
-        console.error('[Client] handleGenerate: no photo selected');
-        setError('Please select a photo before generating!');
+      if (!photoDataUrl || !photoMimeType) {
+        console.error('[Client] handleGenerate: no photo selected or MIME type missing');
+        setError('Photo data or MIME type is missing. Please re-select the photo.');
         setIsGenerating(false); // Reset loading state
         return;
       }
@@ -389,30 +393,41 @@ const DudelCanvas: React.FC = () => {
     });
     
     // Get high-quality PNG with 1.0 quality from the temp canvas with white background
-    let imageToSend = '';
+    let imagePayload = '';
+    let mimeTypeForApi = '';
+
     if (inputMode === 'sketch') {
       const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
       console.log('[Client] handleGenerate: captured dataUrl of length for sketch', dataUrl.length);
-      imageToSend = dataUrl.split(',')[1];
-    } else if (inputMode === 'photo' && photoDataUrl) {
+      imagePayload = dataUrl.split(',')[1];
+      mimeTypeForApi = 'image/png';
+    } else if (inputMode === 'photo' && photoDataUrl && photoMimeType) {
       console.log('[Client] handleGenerate: using photoDataUrl of length', photoDataUrl.length);
-      imageToSend = photoDataUrl.split(',')[1]; // Assuming photoDataUrl is base64 with prefix
+      imagePayload = photoDataUrl.split(',')[1]; // Assuming photoDataUrl is base64 with prefix
+      mimeTypeForApi = photoMimeType;
     }
 
-    if (!imageToSend) {
+    if (!imagePayload) {
       setError('No image data to send.');
       setIsGenerating(false);
       return;
     }
+    
+    const apiRequestBody = {
+        image: imagePayload,
+        prompt: description,
+        mimeType: mimeTypeForApi,
+        imageSize: inputMode === 'sketch' ? `${canvas.width}x${canvas.height}` : 'photo' // Added imageSize here
+    };
 
-    console.log('[Client] handleGenerate: sending POST to /api/generate', { prompt: description, imageSize: inputMode === 'sketch' ? `${canvas.width}x${canvas.height}` : 'photo' });
+    console.log('[Client] handleGenerate: sending POST to /api/generate', apiRequestBody);
     try {
       setGenerationStage('submitting');
       console.log('[Client] handleGenerate: submitting request to API');
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageToSend, prompt: description }),
+        body: JSON.stringify(apiRequestBody),
       });
       
       // After submission is accepted, set stage to processing
@@ -580,6 +595,7 @@ const DudelCanvas: React.FC = () => {
                   onClick={() => {
                     setPhotoDataUrl(null);
                     setSelectedFileName(null);
+                    setPhotoMimeType(null); // Reset MIME type
                     // Optionally, clear the file input value if needed
                     const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
                     if (fileInput) fileInput.value = '';
