@@ -79,7 +79,8 @@ async function fetchImageAsBase64(imageUrl: string): Promise<string> {
 export async function POST(req: Request) {
   try {
     console.log('[API] /api/generate: request received');
-    const { image, prompt } = await req.json();
+    // Destructure mimeType from the request
+    const { image, prompt, mimeType } = await req.json(); // Modified
     
     // Enhance prompt with beautification instruction
     // Format it more clearly to match the example
@@ -97,7 +98,10 @@ export async function POST(req: Request) {
     }
     
     console.log('[API] /api/generate: final prompt sent to AI:', enhancedPrompt);
-    console.log('[API] /api/generate: image length:', image ? image.length : 0);
+    console.log('[API] /api/generate: Received image base64 length:', image ? image.length : 'Not provided (or empty)'); // Modified for clarity
+    // Determine and log the MIME type
+    const actualMimeType = (typeof mimeType === 'string' && mimeType.trim() !== '') ? mimeType : 'image/png'; // New
+    console.log(`[API] /api/generate: using MIME type: ${actualMimeType}`); // New logging
     console.log('[API] /api/generate: first 100 chars of image:', image ? image.substring(0, 100) + '...' : 'No image data');
     
     const FAL_KEY = process.env.FAL_KEY;
@@ -105,8 +109,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing FAL_KEY in environment' }, { status: 500 });
     }
     
-    // Create a data URI from the base64 image
-    const imageDataUrl = `data:image/png;base64,${image}`;
+    // Create a data URI from the base64 image using the actualMimeType
+    const imageDataUrl = `data:${actualMimeType};base64,${image}`; // Modified
     
     console.log('[API] /api/generate: submitting request to FAL.AI queue');
     const response = await fetch(
