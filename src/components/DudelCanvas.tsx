@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import imageCompression from 'browser-image-compression';
 
 const DudelCanvas: React.FC = () => {
   // flood-fill algorithm for fill tool
@@ -93,24 +94,45 @@ const DudelCanvas: React.FC = () => {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
-      setPhotoMimeType(file.type); // Store MIME type
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoDataUrl(reader.result as string);
-        setError(null); // Clear any previous file read errors
+
+      // Compression options
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1024,
+        useWebWorker: true,
       };
-      reader.onerror = () => {
-        console.error("FileReader error:", reader.error);
-        setError(`Failed to read '${file.name}'. The file might be corrupted or not a supported image type. Please try a different file.`);
+
+      try {
+        console.log(`Original file size: ${file.size / 1024 / 1024} MB`);
+        const compressedFile = await imageCompression(file, options);
+        console.log(`Compressed file size: ${compressedFile.size / 1024 / 1024} MB`);
+
+        setPhotoMimeType(compressedFile.type); // Store MIME type of compressed file
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPhotoDataUrl(reader.result as string);
+          setError(null); // Clear any previous file read errors
+        };
+        reader.onerror = () => {
+          console.error("FileReader error:", reader.error);
+          setError(`Failed to read '${compressedFile.name}'. The file might be corrupted. Please try a different file.`);
+          setPhotoDataUrl(null);
+          setSelectedFileName(null);
+          setPhotoMimeType(null); // Reset MIME type on error
+        };
+        reader.readAsDataURL(compressedFile);
+      } catch (error) {
+        console.error("Image compression error:", error);
+        setError("Failed to compress image. Please try a different file.");
         setPhotoDataUrl(null);
         setSelectedFileName(null);
-        setPhotoMimeType(null); // Reset MIME type on error
-      };
-      reader.readAsDataURL(file);
+        setPhotoMimeType(null);
+      }
     }
   };
 
